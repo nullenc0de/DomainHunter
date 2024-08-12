@@ -2,21 +2,26 @@ import subprocess
 import requests
 import json
 import time
-from tqdm import tqdm
+import sys
 
-def get_five_letter_words():
+def get_words(length):
     try:
         with open('/usr/share/dict/words', 'r') as f:
-            return [word.strip().lower() for word in f if len(word.strip()) == 5 and word.strip().isalpha()]
+            return [word.strip().lower() for word in f if len(word.strip()) == length and word.strip().isalpha()]
     except FileNotFoundError:
         print("Word list not found. Please ensure you have a words file at /usr/share/dict/words")
         return []
 
-def check_domains_dns(words):
+def check_domains_dns(words, batch_size=100):
     domains = [f"{word}.com" for word in words]
-    command = f"echo {' '.join(domains)} | dnsx -silent -resp-only"
-    result = subprocess.run(command, shell=True, text=True, capture_output=True)
-    resolved = set(result.stdout.strip().split('\n'))
+    resolved = set()
+    
+    for i in range(0, len(domains), batch_size):
+        batch = domains[i:i+batch_size]
+        command = f"echo {' '.join(batch)} | dnsx -silent -resp-only"
+        result = subprocess.run(command, shell=True, text=True, capture_output=True)
+        resolved.update(result.stdout.strip().split('\n'))
+    
     return [domain for domain in domains if domain not in resolved]
 
 def check_domain_availability(domain):
@@ -51,31 +56,44 @@ def check_domain_availability(domain):
     
     return None
 
-def main():
-    words = get_five_letter_words()
+def main(word_length):
+    words = get_words(word_length)
     if words:
-        print(f"Checking {len(words)} five-letter words...")
+        print(f"Checking {len(words)} {word_length}-letter words...")
         potentially_available = check_domains_dns(words)
         
+        print(f"Found {len(potentially_available)} potentially available domains.")
         print("Validating potentially available domains...")
-        available_domains = []
+        print("Available domains:")
         
-        with tqdm(total=len(potentially_available), desc="Checking domains", unit="domain") as pbar:
-            for domain in potentially_available:
-                is_registered = check_domain_availability(domain)
-                if is_registered is False:
-                    available_domains.append(domain)
-                pbar.update(1)
-                time.sleep(1)  # Add a 1-second delay between requests
+        available_count = 0
+        for index, domain in enumerate(potentially_available, 1):
+            is_registered = check_domain_availability(domain)
+            if is_registered is False:
+                print(f"{domain}")
+                available_count += 1
+            
+            if index % 100 == 0:
+                print(f"Checked {index}/{len(potentially_available)} domains. Found {available_count} so far.")
+            
+            time.sleep(1)  # Add a 1-second delay between requests
         
-        if available_domains:
-            print(f"\nFound {len(available_domains)} available domain(s):")
-            for domain in available_domains:
-                print(domain)
-        else:
-            print("\nNo available domains found.")
+        print(f"\nSearch completed. Total available domains found: {available_count}")
     else:
-        print("No words found. Please check your word list file.")
+        print(f"No {word_length}-letter words found. Please check your word list file.")
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) != 2:
+        print("Usage: python3 script_name.py <word_length>")
+        print("Example: python3 script_name.py 7")
+        sys.exit(1)
+    
+    try:
+        word_length = int(sys.argv[1])
+        if word_length < 1:
+            raise ValueError
+    except ValueError:
+        print("Please provide a valid positive integer for word length.")
+        sys.exit(1)
+    
+    main(word_length)
