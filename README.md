@@ -20,6 +20,8 @@ This Python script automates the process of discovering potentially available fi
 - `dnsx` command-line tool (or an equivalent DNS resolution tool)
 - `requests` library (`pip install requests`)
 - Optional: `tqdm` library for a progress bar (`pip install tqdm`)
+- sudo apt-get install wamerican
+- pip3 install aiohttp
 
 **Installation:**
 
